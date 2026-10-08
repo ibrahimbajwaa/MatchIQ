@@ -47,7 +47,16 @@ Trained on 3,040 matches (2015-16 to 2022-23), tested on the 760 matches of the 
 5. **Time-based split:** train on older seasons, test on the newest. A random split would let the model "see the future".
 6. **Models:** regularised logistic regression and a shallow XGBoost, scored on accuracy and log loss. The model with the lower log loss is saved.
 
-### Run it
+### Web app
+
+`app.py` is a Streamlit app with four pages: **Match Predictor** (pick any fixture and see the probabilities, Elo ratings and last-5 form behind them), **Power Rankings** (current Elo table), **Model Performance** and **About**.
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+### Run the pipeline yourself
 
 ```bash
 pip install -r requirements.txt
