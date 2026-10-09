@@ -2,6 +2,8 @@
 
 AI football analytics for the Premier League. MatchIQ predicts match results, finds statistically similar players, and answers questions in plain English.
 
+**▶ Live demo: [matchiq-ibrahim.streamlit.app](https://matchiq-ibrahim.streamlit.app)**
+
 | Module | What it does | Status |
 |---|---|---|
 | **Match Predictor** | Win / draw / loss probabilities for any fixture | ✅ Done |
