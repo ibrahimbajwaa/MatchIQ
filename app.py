@@ -11,9 +11,12 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from data import load_matches, download  # noqa: E402
+from data import (load_matches, download, download_current,  # noqa: E402
+                  load_current_season, CURRENT_SEASON)
 from predict import (load_model, predict_fixture, recent_results,  # noqa: E402
                      current_teams, elo_table)
+from scout import Scout, load_players, download as download_players, FEATURES as SCOUT_FEATURES, \
+    LABELS as SCOUT_LABELS, SEASON as SCOUT_SEASON, MIN_MINUTES  # noqa: E402
 
 st.set_page_config(page_title="MatchIQ", page_icon=str(ROOT / "assets" / "favicon.png"),
                    layout="centered")
@@ -97,11 +100,57 @@ p, li {{ font-size: 1.02rem; line-height: 1.6; color: {INK}; }}
   color: {INK}; font-variant-numeric: tabular-nums; }}
 .mq-stats .l {{ font-size: .9rem; color: {MUTED}; margin-top: .3rem; }}
 
+/* Fixture list */
+.mq-fxlist {{ display: flex; flex-direction: column; }}
+.mq-fx {{ display: grid; grid-template-columns: 6.5rem 1fr 9.5rem; grid-template-rows: auto auto;
+  column-gap: 1rem; row-gap: .45rem; align-items: center; padding: .8rem 0; border-top: 1px solid {LINE}; }}
+.mq-fx .when {{ color: {MUTED}; font-size: .9rem; }}
+.mq-fx .teams {{ font-family: {DISPLAY}; font-weight: 500; font-size: 1.2rem; color: {MUTED}; min-width: 0; }}
+.mq-fx .teams .pick {{ color: {INK}; font-weight: 700; }}
+.mq-fx .teams .v {{ color: {MUTED}; font-size: 1rem; padding: 0 .2rem; }}
+.mq-fx .nums, .mq-fxhead .nums {{ display: grid; grid-template-columns: repeat(3, 1fr); text-align: right;
+  font-variant-numeric: tabular-nums; font-weight: 600; color: {INK}; }}
+.mq-fxhead {{ display: grid; grid-template-columns: 6.5rem 1fr 9.5rem; column-gap: 1rem; }}
+.mq-fxhead .nums {{ font-weight: 500; color: {MUTED}; font-size: .85rem; padding-bottom: .3rem; }}
+.mq-strip.mini {{ grid-column: 2 / 4; height: 5px; margin-top: 0; }}
+/* Scout */
+.mq-card {{ display: grid; grid-template-columns: 1fr auto; gap: .2rem 1rem; padding: 1.2rem 0 1rem;
+  border-top: 2px solid {INK}; border-bottom: 1px solid {LINE}; margin: .4rem 0 1.4rem; }}
+.mq-card .nm {{ font-family: {DISPLAY}; font-weight: 700; font-size: 2.3rem; line-height: 1; color: {INK}; }}
+.mq-card .meta {{ color: {MUTED}; font-size: .98rem; }}
+.mq-card .style {{ grid-row: 1 / 3; grid-column: 2; align-self: center; font-family: {DISPLAY};
+  font-weight: 600; font-size: 1.15rem; color: #fff; padding: .35rem .8rem; border-radius: 6px; }}
+.mq-pct {{ display: flex; flex-direction: column; gap: .55rem; margin: .4rem 0 .6rem; }}
+.mq-pct .row {{ display: grid; grid-template-columns: 11rem 1fr 2rem 2.8rem; gap: .7rem; align-items: center; }}
+.mq-pct .lab {{ font-size: .92rem; color: {INK}; line-height: 1.25; }}
+.mq-pct .track {{ height: 10px; background: {LINE}; border-radius: 5px; overflow: hidden; }}
+.mq-pct .fill {{ height: 100%; border-radius: 5px; }}
+.mq-pct .p {{ font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; color: {INK}; }}
+.mq-pct .raw {{ font-size: .85rem; color: {MUTED}; font-variant-numeric: tabular-nums; text-align: right; }}
+.mq-sim {{ display: flex; flex-direction: column; }}
+.mq-sim .row {{ display: grid; grid-template-columns: 1.4rem 1fr 4.5rem 2.8rem; gap: .8rem; align-items: center;
+  padding: .55rem 0; border-top: 1px solid {LINE}; }}
+.mq-sim .rk {{ color: {MUTED}; font-variant-numeric: tabular-nums; }}
+.mq-sim .who {{ min-width: 0; }}
+.mq-sim .who b {{ font-family: {DISPLAY}; font-weight: 600; font-size: 1.15rem; color: {INK}; }}
+.mq-sim .who span {{ color: {MUTED}; font-size: .9rem; }}
+.mq-sim .bar {{ height: 6px; background: {LINE}; border-radius: 3px; overflow: hidden; }}
+.mq-sim .bar div {{ height: 100%; background: {HOME}; }}
+.mq-sim .s {{ text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: {INK}; }}
 @media (max-width: 640px) {{
   .mq-row {{ grid-template-columns: 2.4rem 1fr 2.4rem; }}
   .mq-row .lab {{ grid-column: 1 / -1; grid-row: 1; text-align: left; }}
   .mq-row .track {{ display: none; }}
   .mq-stats {{ grid-template-columns: 1fr; }}
+  .mq-fx, .mq-fxhead {{ grid-template-columns: 1fr 8.5rem; }}
+  .mq-fx .when {{ grid-column: 1 / -1; }}
+  .mq-fxhead span:first-child {{ display: none; }}
+  .mq-strip.mini {{ grid-column: 1 / -1; }}
+  .mq-pct .row {{ grid-template-columns: 1fr 2.6rem; }}
+  .mq-pct .track, .mq-pct .raw {{ display: none; }}
+  .mq-sim .row {{ grid-template-columns: 1.4rem 1fr 3rem; }}
+  .mq-sim .bar {{ display: none; }}
+  .mq-card .nm {{ font-size: 1.9rem; }}
 }}
 """
 # Streamlit's markdown ends an HTML block at a blank line, so strip them.
@@ -123,10 +172,18 @@ def chart_theme():
 
 
 # ---------- cached data ----------
-@st.cache_data(show_spinner="Loading 11 seasons of matches…")
-def get_matches():
-    download()  # no-op when the CSVs are already in data/raw
-    return load_matches()
+@st.cache_data(ttl=3 * 3600, show_spinner="Loading every Premier League match since 2014…")
+def get_data():
+    """All finished matches plus this season's remaining fixtures. Refreshed
+    every 3 hours so new results appear without redeploying."""
+    download()  # completed seasons: no-op when the CSVs are already saved
+    try:
+        source = download_current()
+    except RuntimeError:
+        source = "Saved copy"
+    matches = load_matches()
+    _, upcoming = load_current_season()
+    return matches, upcoming, source
 
 
 @st.cache_resource
@@ -135,8 +192,9 @@ def get_model():
 
 
 @st.cache_data(show_spinner=False)
-def get_prediction(home, away):
-    r = predict_fixture(home, away, get_matches(), get_model())
+def get_prediction(home, away, stamp):
+    """`stamp` (latest result date) makes the cache refresh when new results arrive."""
+    r = predict_fixture(home, away, matches, get_model())
     r["f"] = r.pop("features").to_dict()
     return r
 
@@ -151,9 +209,17 @@ def get_predictions():
     return pd.read_csv(ROOT / "reports" / "test_predictions.csv")
 
 
-matches = get_matches()
-TEAMS = current_teams(matches)
-LAST_SEASON = matches.season.iloc[-1]
+@st.cache_resource(show_spinner="Building the player scout…")
+def get_scout():
+    download_players()
+    return Scout(load_players())
+
+
+matches, upcoming, DATA_SOURCE = get_data()
+TEAMS = current_teams()
+LAST_RESULT = matches.Date.max()
+STAMP = f"{LAST_RESULT:%Y-%m-%d %H:%M}"
+FRESHNESS = f"results up to {LAST_RESULT:%-d %B %Y}"
 
 BALL = (f'<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">'
         f'<circle cx="12" cy="12" r="10.5" fill="none" stroke="{INK}" stroke-width="2"/>'
@@ -176,8 +242,8 @@ def html(s):
 def predictor_page():
     wordmark()
     st.title("Who wins?")
-    st.caption(f"Pick any fixture. Predictions use Elo ratings and recent form "
-               f"up to the end of the {LAST_SEASON} season.")
+    st.caption(f"Pick any {CURRENT_SEASON} fixture. Predictions use every Premier League result "
+               f"since 2014, {FRESHNESS}.")
 
     c1, c2 = st.columns(2)
     home = c1.selectbox("Home team", TEAMS, index=TEAMS.index("Arsenal") if "Arsenal" in TEAMS else 0,
@@ -186,7 +252,7 @@ def predictor_page():
     default_away = "Chelsea" if "Chelsea" in away_opts else away_opts[0]
     away = c2.selectbox("Away team", away_opts, index=away_opts.index(default_away), key="away")
 
-    r = get_prediction(home, away)
+    r = get_prediction(home, away, STAMP)
     ph, pd_, pa = r["p_home"], r["p_draw"], r["p_away"]
     f = r["f"]
     H, A = escape(home), escape(away)
@@ -212,9 +278,9 @@ def predictor_page():
     st.subheader("Why the model thinks this")
     gap = f["home_elo"] - f["away_elo"]
     stronger = home if gap > 0 else away
-    st.write(f"{stronger} is rated {abs(gap):.0f} Elo points higher. Elo is the model's strongest "
-             f"signal: it rises after wins, especially against good teams, and falls after losses. "
-             f"Playing at home adds a little more for {home}.")
+    st.write(f"{stronger} is rated {abs(gap):.0f} Elo points higher. The model works from Elo ratings: "
+             f"a team's rating rises after wins, especially against good teams, and falls after "
+             f"losses. Playing at home adds a little more for {home}.")
 
     left, right = st.columns(2, gap="large")
     for col, team in ((left, home), (right, away)):
@@ -247,15 +313,51 @@ def predictor_page():
          f'<div class="mq-row"><span class="mq-colhead" style="grid-column:1/3">{H}</span>'
          f'<span></span><span class="mq-colhead" style="grid-column:4/6;text-align:right">{A}</span></div>'
          + "".join(rows) + "</div>")
-    st.caption(f"Model: {r['model'].lower()}. It rarely names a draw as the single most likely "
-               "result, but the draw percentage is still a meaningful estimate.")
+    st.caption("Form is shown for context. The model itself uses Elo ratings only, because adding "
+               "form didn't improve predictions on unseen seasons (see Model performance). It rarely "
+               "names a draw as the single most likely result, but the draw percentage is still a "
+               "meaningful estimate.")
+
+    html('<div class="mq-keyline"></div>')
+    next_fixtures()
+
+
+def next_fixtures():
+    todo = upcoming[upcoming.Date > LAST_RESULT]
+    if todo.empty:
+        return
+    gw = int(todo.gameweek.iloc[0])
+    games = todo[todo.gameweek == gw]
+    st.subheader(f"Gameweek {gw} predictions")
+    note = ""
+    if games.Date.min() < pd.Timestamp.now():
+        note = (" The data feed hasn't recorded these results yet, so some of these games may "
+                "already have been played.")
+    st.caption(f"Every fixture in the next gameweek, predicted with {FRESHNESS}.{note}")
+    rows = []
+    for g in games.itertuples():
+        r = get_prediction(g.HomeTeam, g.AwayTeam, STAMP)
+        ph, pd_, pa = r["p_home"], r["p_draw"], r["p_away"]
+        pick = g.HomeTeam if ph >= max(pd_, pa) else g.AwayTeam if pa >= pd_ else "Draw"
+        rows.append(
+            f'<div class="mq-fx"><div class="when">{g.Date:%a %-d %b}</div>'
+            f'<div class="teams"><span class="{"pick" if pick == g.HomeTeam else ""}">{escape(g.HomeTeam)}</span>'
+            f' <span class="v">v</span> '
+            f'<span class="{"pick" if pick == g.AwayTeam else ""}">{escape(g.AwayTeam)}</span></div>'
+            f'<div class="nums"><span>{ph:.0%}</span><span>{pd_:.0%}</span><span>{pa:.0%}</span></div>'
+            f'<div class="mq-strip mini"><div style="flex:{ph:.4f};background:{HOME}"></div>'
+            f'<div style="flex:{pd_:.4f};background:{DRAW}"></div>'
+            f'<div style="flex:{pa:.4f};background:{AWAY}"></div></div></div>')
+    html('<div class="mq-fxhead"><span></span><span></span><span class="nums"><span>Home</span>'
+         '<span>Draw</span><span>Away</span></span></div>'
+         f'<div class="mq-fxlist">{"".join(rows)}</div>')
 
 
 def rankings_page():
     wordmark()
     st.title("Power rankings")
-    st.caption(f"Elo rating for every team at the end of {LAST_SEASON}. An average Premier League "
-               "side sits around 1500.")
+    st.caption(f"Elo rating for every {CURRENT_SEASON} team, {FRESHNESS}. An average Premier League "
+               "side sits around 1500, and newly promoted sides start at 1420.")
     table = pd.DataFrame(elo_table(matches), columns=["Team", "Elo"])
     table["Elo"] = table["Elo"].round(0).astype(int)
     table["Rank"] = range(1, len(table) + 1)
@@ -281,7 +383,8 @@ def performance_page():
     m = get_metrics()
     wordmark()
     st.title("How good is it?")
-    st.write(f"The model learned from {m['train_matches']:,} matches (2015-16 to 2022-23), then "
+    st.write(f"The model learned from {m['train_matches']:,} matches ({m['train_seasons'][0]} to "
+             f"{m['train_seasons'][1]}), then "
              f"predicted all {m['test_matches']} matches of {' and '.join(m['test_seasons'])} "
              f"without seeing any of them first.")
     best = next(x for x in m["results"] if x["model"] == m["best_model"])
@@ -310,8 +413,10 @@ def performance_page():
     labels = base.mark_text(align="left", dx=6, fontSize=13, color=INK, fontWeight=600).encode(
         text=alt.Text("pct:Q", format=".1f"))
     st.altair_chart((bars + labels).properties(height=250), width="stretch")
-    st.write("Elo ratings alone get almost the same accuracy as the full model. Adding recent form "
-             "barely helps, which matches what published football models find.")
+    st.write(f"I chose the model on a separate season ({m['validation_season']}) before looking at the "
+             f"test seasons. Elo ratings alone did as well as models with recent form added, so the "
+             f"app uses Elo only. That matches what published football models find: a good "
+             f"team-strength rating is hard to beat with box-score stats.")
 
     st.subheader("Can you trust the percentages?")
     st.write("Each dot groups games by the home-win chance the model gave. If the model says 60%, "
@@ -341,7 +446,104 @@ def performance_page():
         "home_accuracy": "Home team won"})
     st.dataframe(seasons.style.format({"MatchIQ": "{:.1%}", "Home team won": "{:.1%}"}),
                  hide_index=True, width="stretch")
-    st.caption("Home advantage was unusually weak in 2024-25, which made that season harder to call.")
+    st.caption("Home advantage was unusually weak in both test seasons (home teams won about 42% "
+               "of games, against about 45% in earlier seasons), which makes them harder to call.")
+
+
+STYLE_COLORS = {"Goal threats": LOSS, "Creators": AWAY, "Defensive stoppers": INK, "Ball-winners": HOME}
+
+
+def scout_page():
+    wordmark()
+    sc = get_scout()
+    P = sc.players
+    names = sc.style_names()
+    styles = pd.Series(sc.cluster).map(names)
+    st.title("Player scout")
+    st.caption(f"Find players who play alike, based on {SCOUT_SEASON} Premier League stats for every "
+               f"outfield player with {MIN_MINUTES}+ minutes ({len(P)} players).")
+
+    order = P.sort_values("name")
+    labels = {i: f"{r['name']} ({r['team']})" for i, r in order.iterrows()}
+    default = int(P.index[P.name == "Saka"][0]) if (P.name == "Saka").any() else int(order.index[0])
+    c1, c2 = st.columns([3, 1.3], vertical_alignment="bottom")
+    i = c1.selectbox("Player", list(labels), index=list(labels).index(default),
+                     format_func=labels.get, key="scout_player")
+    same_pos = c2.toggle("Same position only", value=False, key="scout_samepos")
+    me = P.loc[i]
+    style = styles[i]
+
+    html(f"""<div class="mq-card">
+<div class="nm">{escape(me['name'])}</div>
+<div class="style" style="background:{STYLE_COLORS.get(style, MUTED)}">{escape(style)}</div>
+<div class="meta">{escape(me.full_name)}, {escape(me.team)}, {me.position.lower()}, {int(me.minutes):,} minutes</div>
+</div>""")
+
+    left, right = st.columns([1.15, 1], gap="large")
+    with left:
+        st.subheader("Scouting report")
+        st.caption(f"Percentile per 90 minutes against other {me.position.lower()}s. "
+                   "90 means better than 90% of them.")
+        pct = sc.percentiles(me["name"])
+        rows = []
+        for f in SCOUT_FEATURES:
+            v = float(pct[f])
+            col = HOME if v >= 80 else "#7fa892" if v >= 40 else "#b9c0b9"
+            rows.append(f'<div class="row"><span class="lab">{escape(SCOUT_LABELS[f])}</span>'
+                        f'<div class="track"><div class="fill" style="width:{v:.0f}%;background:{col}"></div></div>'
+                        f'<span class="p">{v:.0f}</span><span class="raw">{me[f]:.2f}</span></div>')
+        html('<div class="mq-pct">' + "".join(rows) + "</div>")
+        st.caption("Right-hand numbers are the raw per-90 values. Threat and creativity are "
+                   "Opta-based indexes from the official Fantasy Premier League data.")
+    with right:
+        st.subheader("Plays most like")
+        sim = sc.similar(me["name"], n=10, same_position=same_pos)
+        rows = []
+        for rank, (_, r) in enumerate(sim.iterrows(), 1):
+            pct_match = max(r.similarity, 0) * 100
+            rows.append(f'<div class="row"><span class="rk">{rank}</span>'
+                        f'<span class="who"><b>{escape(r["name"])}</b><br><span>{escape(r.team)}, '
+                        f'{r.position.lower()}</span></span>'
+                        f'<div class="bar"><div style="width:{pct_match:.0f}%"></div></div>'
+                        f'<span class="s">{pct_match:.0f}%</span></div>')
+        html('<div class="mq-sim">' + "".join(rows) + "</div>")
+        st.caption("Match % is cosine similarity of the two players' standardised per-90 profiles: "
+                   "it compares what a player does, not how famous they are.")
+
+    html('<div class="mq-keyline"></div>')
+    st.subheader("Style map")
+    st.caption(f"Every player, squashed from {len(SCOUT_FEATURES)} stats into two dimensions. Players close "
+               f"together play alike. Colours are the {sc.k} playing styles found by k-means clustering.")
+    top = set(sim.index[:5])
+    mp = P.assign(x=sc.xy[:, 0], y=sc.xy[:, 1], style=styles,
+                  role=["Selected" if j == i else "Most similar" if j in top else "Other" for j in P.index])
+    dom = [n for n in STYLE_COLORS if n in set(styles)] + sorted(set(styles) - set(STYLE_COLORS))
+    rng = [STYLE_COLORS.get(n, MUTED) for n in dom]
+    base = alt.Chart(mp).encode(
+        x=alt.X("x:Q", axis=None), y=alt.Y("y:Q", axis=None),
+        tooltip=[alt.Tooltip("name:N", title="Player"), alt.Tooltip("team:N", title="Team"),
+                 alt.Tooltip("position:N", title="Position"), alt.Tooltip("style:N", title="Style")])
+    dots = base.transform_filter("datum.role == 'Other'").mark_point(filled=True, size=46, opacity=.55).encode(
+        color=alt.Color("style:N", scale=alt.Scale(domain=dom, range=rng),
+                        legend=alt.Legend(title=None, orient="top", symbolOpacity=1)),
+        shape=alt.Shape("style:N", scale=alt.Scale(domain=dom), legend=None))
+    near = base.transform_filter("datum.role == 'Most similar'").mark_point(
+        filled=True, size=110, stroke="#fff", strokeWidth=1.5).encode(
+        color=alt.Color("style:N", scale=alt.Scale(domain=dom, range=rng), legend=None),
+        shape=alt.Shape("style:N", scale=alt.Scale(domain=dom), legend=None))
+    sel = base.transform_filter("datum.role == 'Selected'").mark_point(
+        size=420, filled=False, strokeWidth=3, color=INK, shape="circle")
+    lab = base.transform_filter("datum.role != 'Other'").mark_text(
+        dx=10, dy=-9, align="left", fontSize=13, fontWeight=600, color=INK).encode(text="name:N")
+    st.altair_chart((dots + near + sel + lab).properties(height=460), width="stretch")
+    with st.expander("How the playing styles were found"):
+        st.write(f"I tried k-means with 4 to 8 groups and kept the number with the best silhouette "
+                 f"score (k = {sc.k}, score {sc.silhouette[sc.k]:.2f}). A score that low means the "
+                 "styles overlap, which is realistic: plenty of players sit between two roles. "
+                 "Each group is named after the stat it stands out on most.")
+        cent = sc.centroids().rename(index=names, columns=SCOUT_LABELS).T.round(2)
+        st.dataframe(cent, width="stretch")
+        st.caption("Average z-score per style: above 0 means more than a typical player.")
 
 
 def about_page():
@@ -351,20 +553,28 @@ def about_page():
              "student at the University of Calgary.")
     st.subheader("How the predictor works")
     st.markdown("""
-1. **Data.** 4,180 Premier League matches from 2014-15 to 2024-25, from football-data.co.uk.
+1. **Data.** Every Premier League match since 2014-15 from football-data.co.uk, plus this season's results from the official Fantasy Premier League feed.
 2. **No peeking.** Every feature for a match uses only games played before kickoff.
 3. **Team strength.** Elo ratings rise after wins and fall after losses, with bigger wins counting more.
 4. **Recent form.** Points, goals, shots and shots on target over each team's last five games.
 5. **Honest testing.** Train on older seasons, test on the two newest ones the model never saw.
 """)
+    st.subheader("How the player scout works")
+    st.markdown(f"""
+1. **Data.** {SCOUT_SEASON} stats for every outfield player with {MIN_MINUTES}+ minutes, from the
+   official Fantasy Premier League data (Opta-based).
+2. **Per 90.** Counting stats become per-90-minute rates so part-time and full-time players compare fairly.
+3. **Similarity.** Stats are standardised, then players are compared with cosine similarity.
+4. **Styles.** K-means clustering groups players into playing styles.
+""")
     st.subheader("Coming next")
-    st.write("Player Scout, for finding players with similar playing styles, and Ask MatchIQ, "
-             "a chatbot that answers questions using the predictor and the scout.")
+    st.write("Ask MatchIQ, a chatbot that answers questions using the predictor and the scout.")
     st.markdown("[View the code on GitHub](https://github.com/ibrahimbajwaa/MatchIQ)")
 
 
 pg = st.navigation([
     st.Page(predictor_page, title="Predictor", default=True),
+    st.Page(scout_page, title="Player scout", url_path="scout"),
     st.Page(rankings_page, title="Power rankings", url_path="rankings"),
     st.Page(performance_page, title="Model performance", url_path="performance"),
     st.Page(about_page, title="About", url_path="about"),

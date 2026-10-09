@@ -44,19 +44,27 @@ def build_features(matches: pd.DataFrame) -> pd.DataFrame:
     recent_away = defaultdict(lambda: deque(maxlen=FORM_WINDOW))
     rows = []
     season = None
+    first_season = matches.season.iloc[0]
+    last_season_teams, this_season_teams = set(), set()
 
     for m in matches.itertuples(index=False):
         if m.season != season:
             season = m.season
+            last_season_teams, this_season_teams = this_season_teams, set()
             # Pull ratings 20% back toward average each summer (squads change)
             for t in elo:
                 elo[t] = 0.8 * elo[t] + 0.2 * ELO_START
 
         h, a = m.HomeTeam, m.AwayTeam
-        first_season = matches.season.iloc[0]
         for t in (h, a):
-            if t not in elo:
-                elo[t] = ELO_START if m.season == first_season else PROMOTED_RATING
+            if t not in this_season_teams:
+                this_season_teams.add(t)
+                if m.season == first_season:
+                    elo.setdefault(t, ELO_START)
+                elif t not in last_season_teams:
+                    # Not in the league last season = promoted. Old ratings from
+                    # years ago say little about a newly promoted squad.
+                    elo[t] = PROMOTED_RATING
 
         # ---------- features: state BEFORE kickoff ----------
         f = {
@@ -96,9 +104,13 @@ def build_features(matches: pd.DataFrame) -> pd.DataFrame:
 def _form(history, prefix):
     """Average stats over a team's recent matches (NaN if none yet)."""
     keys = ("pts", "gf", "ga", "shots", "sot")
-    if not history:
-        return {f"{prefix}_{k}": np.nan for k in keys}
-    return {f"{prefix}_{k}": float(np.mean([g[k] for g in history])) for k in keys}
+    out = {}
+    for k in keys:
+        # Current-season games from the FPL feed have goals but no shot counts,
+        # so average only the values we have (NaN if none).
+        vals = [g[k] for g in history if pd.notna(g[k])]
+        out[f"{prefix}_{k}"] = float(np.mean(vals)) if vals else np.nan
+    return out
 
 
 FEATURES = [

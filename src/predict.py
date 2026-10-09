@@ -16,7 +16,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
-from data import load_matches
+from data import load_matches, load_current_season, CURRENT_SEASON
 from features import build_features
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,10 +27,11 @@ def load_model():
     return joblib.load(MODEL_PATH)
 
 
-def current_teams(matches):
-    """Teams in the most recent season of the data, alphabetical."""
-    last = matches.season.iloc[-1]
-    return sorted(set(matches[matches.season == last].HomeTeam))
+def current_teams(matches=None):
+    """The 20 teams in this season's fixture list, alphabetical."""
+    played, upcoming = load_current_season()
+    both = pd.concat([played[["HomeTeam", "AwayTeam"]], upcoming[["HomeTeam", "AwayTeam"]]])
+    return sorted(set(both.HomeTeam) | set(both.AwayTeam))
 
 
 def predict_fixture(home, away, matches=None, bundle=None):
@@ -76,7 +77,7 @@ def elo_table(matches=None):
     """Current Elo rating for every team in the latest season, best first."""
     matches = load_matches() if matches is None else matches
     elo = build_features(matches).attrs["final_elo"]
-    teams = current_teams(matches)
+    teams = current_teams()
     return sorted(((t, elo[t]) for t in teams), key=lambda x: -x[1])
 
 
@@ -88,7 +89,7 @@ if __name__ == "__main__":
     args = ap.parse_args()
     if args.ratings:
         m = load_matches()
-        print(f"\nElo ratings at the end of {m.season.iloc[-1]}:")
+        print(f"\nLatest Elo ratings ({CURRENT_SEASON} teams, results to {m.Date.max():%d %b %Y}):")
         for i, (t, r) in enumerate(elo_table(m), 1):
             print(f"  {i:>2}. {t:<16} {r:.0f}")
     elif args.home and args.away:

@@ -1,66 +1,76 @@
 {
-  "train_matches": 3040,
+  "train_matches": 3420,
   "test_matches": 760,
-  "test_seasons": [
-    "2023-24",
-    "2024-25"
+  "train_seasons": [
+    "2015-16",
+    "2023-24"
   ],
-  "best_model": "Logistic regression",
+  "test_seasons": [
+    "2024-25",
+    "2025-26"
+  ],
+  "best_model": "Elo rating only",
+  "validation_season": "2023-24",
+  "validation_log_loss": {
+    "Elo rating only": 0.93,
+    "Logistic regression": 0.9305,
+    "XGBoost": 0.9399
+  },
   "results": [
     {
       "model": "Always home win",
-      "accuracy": 0.4342,
-      "log_loss": 1.0675,
+      "accuracy": 0.4171,
+      "log_loss": 1.0826,
       "pred_draw_share": 0.0
     },
     {
       "model": "Elo rating only",
-      "accuracy": 0.5474,
-      "log_loss": 0.9588,
+      "accuracy": 0.4974,
+      "log_loss": 1.0083,
       "pred_draw_share": 0.0
     },
     {
       "model": "Logistic regression",
-      "accuracy": 0.5487,
-      "log_loss": 0.9622,
-      "pred_draw_share": 0.0079
+      "accuracy": 0.4908,
+      "log_loss": 1.0137,
+      "pred_draw_share": 0.0013
     },
     {
       "model": "XGBoost",
-      "accuracy": 0.5526,
-      "log_loss": 0.9761,
-      "pred_draw_share": 0.0092
+      "accuracy": 0.4934,
+      "log_loss": 1.0266,
+      "pred_draw_share": 0.0066
     }
   ],
   "per_season": [
-    {
-      "season": "2023-24",
-      "matches": 380,
-      "model_accuracy": 0.5789,
-      "home_accuracy": 0.4605
-    },
     {
       "season": "2024-25",
       "matches": 380,
       "model_accuracy": 0.5184,
       "home_accuracy": 0.4079
+    },
+    {
+      "season": "2025-26",
+      "matches": 380,
+      "model_accuracy": 0.4763,
+      "home_accuracy": 0.4263
     }
   ],
   "confusion_matrix": [
     [
-      149,
-      3,
-      103
-    ],
-    [
-      68,
+      126,
       0,
-      107
+      120
     ],
     [
-      59,
-      3,
-      268
+      72,
+      0,
+      125
+    ],
+    [
+      65,
+      0,
+      252
     ]
   ],
   "confusion_labels": [
@@ -69,106 +79,106 @@
     "H"
   ],
   "test_outcome_share": {
-    "A": 0.3355,
-    "D": 0.2303,
-    "H": 0.4342
+    "A": 0.3237,
+    "D": 0.2592,
+    "H": 0.4171
   },
   "xgb_feature_importance": [
     {
       "feature": "elo_diff",
-      "importance": 0.1958
+      "importance": 0.1878
     },
     {
       "feature": "home_elo",
-      "importance": 0.0657
+      "importance": 0.0695
     },
     {
       "feature": "away_elo",
-      "importance": 0.0612
+      "importance": 0.0584
     },
     {
       "feature": "diff_sot",
-      "importance": 0.0528
-    },
-    {
-      "feature": "away_form_sot",
-      "importance": 0.0477
+      "importance": 0.0582
     },
     {
       "feature": "diff_shots",
-      "importance": 0.0459
+      "importance": 0.0552
+    },
+    {
+      "feature": "away_form_sot",
+      "importance": 0.045
     },
     {
       "feature": "away_form_shots",
-      "importance": 0.0432
+      "importance": 0.0421
     },
     {
       "feature": "home_form_sot",
-      "importance": 0.0335
+      "importance": 0.033
     },
     {
       "feature": "home_at_home_pts",
-      "importance": 0.0334
+      "importance": 0.0322
     },
     {
-      "feature": "diff_ga",
-      "importance": 0.0325
-    },
-    {
-      "feature": "home_form_pts",
-      "importance": 0.0308
+      "feature": "away_on_road_ga",
+      "importance": 0.0317
     },
     {
       "feature": "home_at_home_ga",
+      "importance": 0.0309
+    },
+    {
+      "feature": "home_form_pts",
       "importance": 0.0307
     },
     {
       "feature": "away_form_gf",
-      "importance": 0.0303
+      "importance": 0.0302
     },
     {
       "feature": "away_form_ga",
-      "importance": 0.03
-    },
-    {
-      "feature": "away_form_pts",
-      "importance": 0.0297
-    },
-    {
-      "feature": "away_on_road_gf",
-      "importance": 0.0287
-    },
-    {
-      "feature": "away_on_road_ga",
-      "importance": 0.0287
+      "importance": 0.0293
     },
     {
       "feature": "diff_pts",
-      "importance": 0.0287
-    },
-    {
-      "feature": "home_form_gf",
-      "importance": 0.0277
+      "importance": 0.0292
     },
     {
       "feature": "home_at_home_gf",
-      "importance": 0.0273
+      "importance": 0.0287
     },
     {
-      "feature": "home_form_shots",
-      "importance": 0.0261
+      "feature": "diff_ga",
+      "importance": 0.0281
+    },
+    {
+      "feature": "away_on_road_gf",
+      "importance": 0.0279
+    },
+    {
+      "feature": "away_form_pts",
+      "importance": 0.0277
     },
     {
       "feature": "diff_gf",
-      "importance": 0.0255
+      "importance": 0.0274
+    },
+    {
+      "feature": "home_form_shots",
+      "importance": 0.0258
+    },
+    {
+      "feature": "home_form_gf",
+      "importance": 0.0242
     },
     {
       "feature": "away_on_road_pts",
-      "importance": 0.0235
+      "importance": 0.024
     },
     {
       "feature": "home_form_ga",
-      "importance": 0.0204
+      "importance": 0.023
     }
   ]
 }
