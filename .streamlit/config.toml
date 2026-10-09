@@ -1,10 +1,13 @@
 [theme]
 base = "light"
-primaryColor = "#1d6b52"
-backgroundColor = "#f6f7f5"
-secondaryBackgroundColor = "#e9ede9"
-textColor = "#17201c"
+primaryColor = "#1e6b47"
+backgroundColor = "#f2f4f1"
+secondaryBackgroundColor = "#e5e9e4"
+textColor = "#13233a"
 font = "sans serif"
 
 [client]
 toolbarMode = "minimal"
+
+[server]
+enableStaticServing = true
