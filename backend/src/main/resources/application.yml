@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: matchiq
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/matchiq}
+    username: ${DATABASE_USER:matchiq}
+    password: ${DATABASE_PASSWORD:matchiq}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 3000
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # Fail fast. Lettuce's default command timeout is a minute, which would make a Redis outage look like a hang
+      # instead of triggering the Postgres fallback.
+      timeout: 500ms
+      connect-timeout: 500ms
+  flyway:
+    enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        # Redis being down degrades the service (reads fall back to Postgres) but must not get the pod restarted
+        # or pulled out of rotation, so readiness depends on the database only.
+        readiness:
+          include: readinessState,db
+
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"
+
+matchiq:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173}
+  leaderboards:
+    refill-ms: 30000

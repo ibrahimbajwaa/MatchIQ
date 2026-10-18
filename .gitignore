@@ -1,5 +1,18 @@
+# Python
 __pycache__/
 *.pyc
 .venv/
-.DS_Store
+.pytest_cache/
 .ipynb_checkpoints/
+# Java
+backend/target/
+*.class
+# Node
+frontend/node_modules/
+frontend/dist/
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+# Generated, reproducible with `python pipeline/src/export.py`
+pipeline/out/

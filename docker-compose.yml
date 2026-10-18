@@ -1,0 +1,50 @@
+# Whole stack on one machine:  docker compose up --build   then open http://localhost:3000
+# Postgres is the source of truth (Flyway loads the data on first start), Redis holds the leaderboards, the backend is
+# the Spring Boot API, and nginx serves the React build and forwards /api to the backend.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: matchiq
+      POSTGRES_USER: matchiq
+      POSTGRES_PASSWORD: matchiq
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matchiq -d matchiq"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    # Leaderboards are rebuilt from Postgres every 30 seconds, so Redis needs no persistence.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/matchiq
+      DATABASE_USER: matchiq
+      DATABASE_PASSWORD: matchiq
+      REDIS_HOST: redis
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports:
+      - "8080:8080"
+
+  web:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  pgdata:

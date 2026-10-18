@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pipeline:
+    name: Python pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+      - run: pip install -r pipeline/requirements.txt
+      - run: python -m pytest pipeline/tests -q
+
+  backend:
+    name: Spring Boot API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Regenerate the seed data and golden files from the pipeline
+        run: |
+          pip install -r pipeline/requirements.txt
+          python -W ignore pipeline/src/export.py
+      # Unit tests check the Java maths against the Python goldens; the integration test starts the whole app against
+      # real Postgres and Redis containers (Docker is available on GitHub-hosted runners).
+      - run: mvn -B verify
+        working-directory: backend
+
+  frontend:
+    name: React frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      # Fails if the mock API (which the frontend is built against) drifts from the Java response records.
+      - run: npm run check:contract
